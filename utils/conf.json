@@ -1,0 +1,26 @@
+{
+	
+	"model_name" : "resnet18",
+	
+	"num_models" : 25,
+
+	"num_edge_servers": 5,
+	
+	"type" : "cifar10",
+	
+	"global_epochs" : 20,
+	
+	"local_epochs" : 3,
+	
+	"k" : 25,
+	
+	"batch_size" : 32,
+	
+	"lr" : 0.001,
+	
+	"momentum" : 0.0001,
+	
+	"lambda" : 0.2,
+
+	"edge_lambda": 0.2
+}
