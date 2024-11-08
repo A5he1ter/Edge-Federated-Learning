@@ -2,17 +2,17 @@
 	
 	"model_name" : "resnet18",
 	
-	"num_models" : 25,
+	"num_models" : 150,
 
-	"num_edge_servers": 5,
+	"num_edge_servers": 10,
 	
 	"type" : "cifar10",
 	
-	"global_epochs" : 20,
+	"global_epochs" : 100,
 	
-	"local_epochs" : 3,
+	"local_epochs" : 10,
 	
-	"k" : 25,
+	"k" : 100,
 	
 	"batch_size" : 32,
 	
@@ -20,7 +20,7 @@
 	
 	"momentum" : 0.0001,
 	
-	"lambda" : 0.2,
+	"lambda" : 0.1,
 
-	"edge_lambda": 0.2
+	"edge_lambda": 0.1
 }
