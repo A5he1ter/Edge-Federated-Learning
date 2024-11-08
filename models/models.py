@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torchvision import models
 import torch.nn.functional as F
-from Resnets import *
+from models.Resnets import *
 
 device = None
 """

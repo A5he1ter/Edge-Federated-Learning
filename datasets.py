@@ -24,5 +24,13 @@ def get_dataset(dir, name):
 										transform=transform_train)
 		eval_dataset = datasets.CIFAR10(dir, train=False, transform=transform_test)
 		
+	elif name=='emnist':
+		transform = transforms.Compose([
+			transforms.ToTensor(),
+			transforms.Normalize((0.1736,), (0.3317,))
+		])
+
+		train_dataset = datasets.EMNIST(root=dir, split='byclass', train=True, download=True, transform=transform)
+		eval_dataset = datasets.EMNIST(root=dir, split='byclass', train=False, download=True, transform=transform)
 	
 	return train_dataset, eval_dataset
