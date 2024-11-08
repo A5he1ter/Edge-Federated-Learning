@@ -3,6 +3,12 @@ import torch
 from edge_server import *
 
 device = None
+"""
+如果使用cuda的话，把该段代码改为
+if torch.cuda.is_available():
+	device = torch.device('cuda')
+else device = torch.device('cpu')
+"""
 if torch.backends.mps.is_available():
 	device = torch.device('mps')
 else:
