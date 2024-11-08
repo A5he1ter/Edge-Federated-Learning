@@ -13,8 +13,8 @@
 	"local_epochs" : 10,
 	
 	"k" : 100,
-	
-	"batch_size" : 32,
+
+	"batch_size" : 128,
 	
 	"lr" : 0.001,
 	

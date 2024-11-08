@@ -1,5 +1,4 @@
-import models
-import torch
+from models import models
 from edge_server import *
 
 device = None
