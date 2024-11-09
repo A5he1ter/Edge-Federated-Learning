@@ -10,7 +10,7 @@
 	
 	"global_epochs" : 100,
 	
-	"local_epochs" : 10,
+	"local_epochs" : 1,
 	
 	"k" : 100,
 

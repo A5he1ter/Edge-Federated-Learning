@@ -5,10 +5,21 @@ This code are run on the M1 pro chip with mps.
 - python 3.10
 
 #### Setting
-- Resnet18
-- cifar10
 - 100 clients
 - 10 edge servers
 
 #### Accuracy
+- Resnet18
+- cifar10
+
 ![acc.png](fig/acc.png)
+
+- 2NN
+- mnist
+
+![acc_mnist.png](fig/acc_mnist.png)
+
+- CNN
+- emnist
+
+![acc_emnist.png](fig/acc_emnist.png)
