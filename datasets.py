@@ -4,6 +4,9 @@ from utils.femnist import  FEMNIST
 
 def get_dataset(dir, name):
 
+	train_dataset = None
+	eval_dataset = None
+
 	if name=='mnist':
 		train_dataset = datasets.MNIST(dir, train=True, download=True, transform=transforms.ToTensor())
 		eval_dataset = datasets.MNIST(dir, train=False, transform=transforms.ToTensor())
