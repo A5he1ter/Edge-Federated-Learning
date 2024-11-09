@@ -115,7 +115,7 @@ if __name__ == '__main__':
 	plt.ylabel('Accuracy')
 	plt.title('Global Model Accuracy')
 	plt.legend()
-	plt.savefig('./fig/acc_emnist.png')
+	plt.savefig('./fig/acc_femnist.png')
 
 	# global model loss fig
 	plt.figure()
@@ -124,5 +124,5 @@ if __name__ == '__main__':
 	plt.ylabel('Loss')
 	plt.title('Global Model Loss')
 	plt.legend()
-	plt.savefig('./fig/loss_emnist.png')
+	plt.savefig('./fig/loss_femnist.png')
 	plt.show()

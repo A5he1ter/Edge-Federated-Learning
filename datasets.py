@@ -1,5 +1,6 @@
 import torch
 from torchvision import datasets, transforms
+from utils.femnist import  FEMNIST
 
 def get_dataset(dir, name):
 
@@ -31,5 +32,17 @@ def get_dataset(dir, name):
 
 		train_dataset = datasets.EMNIST(root=dir, split='byclass', train=True, download=True, transform=transform)
 		eval_dataset = datasets.EMNIST(root=dir, split='byclass', train=False, download=True, transform=transform)
+
+	elif name=='fashion_mnist':
+		transform = transforms.Compose([
+			transforms.ToTensor(),
+			transforms.Normalize((0.2860,), (0.3530,)),
+		])
+		train_dataset = datasets.FashionMNIST(root=dir, train=True, download=True, transform=transform)
+		eval_dataset = datasets.FashionMNIST(root=dir, train=False, download=True, transform=transform)
+
+	elif name=='femnist':
+		train_dataset = FEMNIST( train=True)
+		eval_dataset = FEMNIST(train=False)
 	
 	return train_dataset, eval_dataset

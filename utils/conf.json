@@ -1,12 +1,12 @@
 {
 
-	"model_name" : "CNN",
+	"model_name" : "FEMNIST_CNN",
 
 	"num_models" : 150,
 
 	"num_edge_servers": 10,
 	
-	"type" : "emnist",
+	"type" : "femnist",
 	
 	"global_epochs" : 100,
 	
@@ -14,7 +14,7 @@
 	
 	"k" : 100,
 
-	"batch_size" : 256,
+	"batch_size" : 128,
 	
 	"lr" : 0.01,
 	

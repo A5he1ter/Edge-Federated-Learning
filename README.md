@@ -23,3 +23,13 @@ This code are run on the M1 pro chip with mps.
 - emnist
 
 ![acc_emnist.png](fig/acc_emnist.png)
+
+- CNN
+- fashion_mnist
+
+![acc_fashion_mnist.png](fig/acc_fashion_mnist.png)
+
+- CNN
+- femnist
+
+![acc_femnist.png](fig/acc_femnist.png)
