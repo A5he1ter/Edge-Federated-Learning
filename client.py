@@ -192,7 +192,7 @@ class Client(object):
 		for name, param in model.state_dict().items():
 			self.local_model.state_dict()[name].copy_(param.clone())
 
-		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'], momentum=self.conf['momentum'])
+		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
 		self.local_model.train()
 
@@ -200,7 +200,6 @@ class Client(object):
 
 			for batch_id, batch in enumerate(self.train_loader):
 				data, target = batch
-				print(data.shape[0])
 				for example_id in range(data.shape[0]):
 					data[example_id] = Adding_Trigger(data[example_id])
 					target[example_id] = 0
@@ -227,5 +226,5 @@ class Client(object):
 		# print("Client", c, "done. --Backdoor attack--")
 		# return diff
 		local_params = self.local_model.state_dict()
-		print("Client", c, "done. --LIE attack--")
+		# print("Client", c, "done. --LIE attack--")
 		return local_params

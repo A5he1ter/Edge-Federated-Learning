@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
 			mal_client_params = {}
 			user_params = []
-			alpha = 0.2
+			alpha = 0.1
 			for i in range(conf["num_edge_servers"]):
 				for c in edge_servers[i].clients:
 					if c.is_malicious:
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 			new_params = params_temp_mean + learning_rate * grads_mean
 			new_grads = (params_mean - new_params) / learning_rate
 
-			num_std = z_values[28]
+			num_std = z_values[3]
 			new_user_grads = np.clip(new_grads, grads_mean - num_std * grads_stdev,
 									 grads_mean + num_std * grads_stdev)
 
@@ -254,30 +254,30 @@ if __name__ == '__main__':
 
 	# global model accuracy fig
 	plt.figure()
-	plt.plot(range(0, conf["global_epochs"]), global_acc_list, 'r', label='Accuracy')
+	plt.plot(range(0, conf["global_epochs"] - 1), global_acc_list, 'r', label='Accuracy')
 	plt.xlabel('Epoch')
 	plt.ylabel('Accuracy')
 	plt.title('Global Model Accuracy')
 	plt.legend()
-	plt.savefig('./fig/acc_'+str(conf["type"])+"_"+str(conf["attack_type"])+".png")
+	plt.savefig('./fig/acc '+str(conf["type"])+" "+str(conf["attack_type"])+".png")
 
 	# global model loss fig
 	plt.figure()
-	plt.plot(range(0, conf["global_epochs"]), global_loss_list, 'b', label='Loss')
+	plt.plot(range(0, conf["global_epochs"] - 1), global_loss_list, 'b', label='Loss')
 	plt.xlabel('Epoch')
 	plt.ylabel('Loss')
 	plt.title('Global Model Loss')
 	plt.legend()
-	plt.savefig('./fig/loss_' + str(conf["type"]) + "_" + str(conf["attack_type"]) + ".png")
+	plt.savefig('./fig/loss ' + str(conf["type"]) + " " + str(conf["attack_type"]) + ".png")
 	plt.show()
 
 	# global asr fig
 	if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
 		plt.figure()
-		plt.plot(range(0, conf["global_epochs"]), global_asr_list, 'g', label='ASR')
+		plt.plot(range(0, conf["global_epochs"] - 1), global_asr_list, 'g', label='ASR')
 		plt.xlabel('Epoch')
 		plt.ylabel('ASR')
 		plt.title('ASR')
 		plt.legend()
-		plt.savefig('./fig/asr_' + str(conf["type"]) + "_" + str(conf["attack_type"]) + ".png")
+		plt.savefig('./fig/asr ' + str(conf["type"]) + " " + str(conf["attack_type"]) + ".png")
 		plt.show()
