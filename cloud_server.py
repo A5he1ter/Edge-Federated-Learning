@@ -1,5 +1,8 @@
+import torch
+
 from models import models
 from edge_server import *
+from utils.adding_trigger import Adding_Trigger
 
 device = None
 """
@@ -76,3 +79,28 @@ class Server(object):
 		total_l = total_loss / dataset_size
 
 		return acc, total_l
+
+	def ASR(self):
+		self.global_model.eval()
+		sum_ASR = 0
+		count = 0
+		for batch_id, batch in enumerate(self.eval_loader):
+			data, target = batch
+
+			data = data.to(device)
+			target = target.to(device)
+
+			for example_id in range(data.shape[0]):
+				data[example_id] = Adding_Trigger(data[example_id])
+
+			output = self.global_model(data)
+			output = torch.argmax(output, dim=1)
+
+			for i, v in enumerate(output):
+				if v != target[i] and v == 0:
+					count += 1
+
+			sum_ASR += data.shape[0]
+
+		asr = count / sum_ASR
+		return asr

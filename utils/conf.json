@@ -1,12 +1,16 @@
 {
 
-	"model_name" : "FEMNIST_CNN",
+	"model_name" : "MNIST_2NN",
 
-	"num_models" : 150,
+	"num_models" : 100,
+
+	"malicious_ratio": 0.4,
+
+	"attack_type": "scaling attack",
 
 	"num_edge_servers": 10,
 	
-	"type" : "femnist",
+	"type" : "mnist",
 	
 	"global_epochs" : 100,
 	
@@ -14,11 +18,11 @@
 	
 	"k" : 100,
 
-	"batch_size" : 128,
+	"batch_size" : 64,
 	
 	"lr" : 0.01,
 	
-	"momentum" : 0.0001,
+	"momentum" : 0.9,
 	
 	"lambda" : 0.1,
 
