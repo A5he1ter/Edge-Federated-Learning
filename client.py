@@ -1,5 +1,6 @@
 import random
 import argparse, json
+from cProfile import label
 
 from sympy.core.parameters import global_parameters
 
@@ -9,6 +10,7 @@ import copy
 import numpy as np
 from utils import adding_trigger
 from utils.adding_trigger import Adding_Trigger
+from tqdm import tqdm
 
 device = None
 if torch.backends.mps.is_available():
@@ -144,6 +146,39 @@ class Client(object):
 
 		return diff
 
+	def random_label_flipping_attack_train(self, model, c):
+		nclass = np.max(np.array(self.train_dataset.targets)) + 1
+
+		for name, param in model.state_dict().items():
+			self.local_model.state_dict()[name].copy_(param.clone())
+
+		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
+
+		self.local_model.train()
+
+		for e in range(self.conf["local_epochs"]):
+			for batch_id, batch in enumerate(self.train_loader):
+				data, target = batch
+
+				target = (random.randint(0, nclass - 1) + target) % nclass
+
+				data, target = data.to(device), target.to(device)
+
+				optimizer.zero_grad()
+				output = self.local_model(data)
+				loss = torch.nn.functional.cross_entropy(output, target)
+				loss.backward()
+				optimizer.step()
+
+			diff = dict()
+			for name, data in self.local_model.state_dict().items():
+				diff[name] = (data - model.state_dict()[name])
+
+			# print("Client", c, "done. --LF attack--")
+
+			return diff
+
+
 	def gaussian_attack_train(self, model, c, num_clients, num_malicious_clients):
 		for name, param in model.state_dict().items():
 			self.local_model.state_dict()[name].copy_(param.clone())
@@ -171,11 +206,14 @@ class Client(object):
 		local_params = self.local_model.state_dict()
 
 		for name, data in local_params.items():
-			noise = torch.randn(data.shape).to(device)
-			a = torch.mean(data.float())
-			b = torch.std(data.float())
+			# noise = torch.randn(data.shape).to(device)
+			noise = torch.randn_like(data).to(device)
+			# a = torch.mean(data.float())
+			# b = torch.std(data.float())
+			a = data.float().mean()
+			b = data.float().std()
 			data_GS = a + noise * b
-			local_params[name].copy_(data_GS)
+			local_params[name].copy_(data_GS.clone())
 
 		diff = dict()
 		for name, data in local_params.items():

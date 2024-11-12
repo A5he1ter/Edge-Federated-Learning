@@ -16,6 +16,7 @@ from cloud_server import *
 from edge_server import *
 from client import *
 import models, datasets
+from tqdm import tqdm
 
 device = None
 if torch.backends.mps.is_available():
@@ -47,10 +48,15 @@ if __name__ == '__main__':
 
 	# 创建客户端，并标记恶意客户端
 	num_malicious_clients = int(conf["malicious_ratio"] * conf["num_models"])
-	print("恶意客户端数量", num_malicious_clients)
+	print("num of edge servers:", num_client_groups)
+	print("num of clients:", conf["num_models"])
+	print("num of malicious clients:", num_malicious_clients)
 	malicious_clients = random.sample(range(conf["num_models"]), num_malicious_clients)
-	print("恶意客户端", malicious_clients)
-	print("device", device)
+	print("malicious clients:", malicious_clients)
+	print("num of global epochs:", conf["global_epochs"])
+	print("device:", device)
+	print("attack type:", conf["attack_type"])
+	print("dataset:", conf["type"])
 
 	for c in range(conf["num_models"]):
 		if c in malicious_clients:
@@ -144,41 +150,49 @@ if __name__ == '__main__':
 				edge_weights_accumulator_list.append(edge_weights_accumulator)
 		else:
 			for i in range(conf["num_edge_servers"]):
-				for name, params in server.global_model.state_dict().items():
-					edge_weights_accumulator[name] = torch.zeros_like(params)
+				with tqdm(edge_servers[i].clients, total=len(edge_servers[i].clients), desc=f"Edge Server {i+1}/{conf['num_edge_servers']}", ncols=120) as pbar:
+					for name, params in server.global_model.state_dict().items():
+						edge_weights_accumulator[name] = torch.zeros_like(params)
 
-				# 本地训练与攻击
-				for c in edge_servers[i].clients:
-					diff = dict()
-					if conf["attack_type"] == "scaling attack":
-						if c.is_malicious:
-							diff = c.scaling_attack_train(edge_servers[i].global_model, c.client_id,
-													  conf["num_models"], num_malicious_clients)
+					# 本地训练与攻击
+					for c in pbar:
+						diff = dict()
+						if conf["attack_type"] == "scaling attack":
+							if c.is_malicious:
+								diff = c.scaling_attack_train(edge_servers[i].global_model, c.client_id,
+														  conf["num_models"], num_malicious_clients)
+							else:
+								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+
+						elif conf["attack_type"] == "label flipping attack":
+							if c.is_malicious:
+								diff = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
+																	 conf["num_models"], num_malicious_clients)
+							else:
+								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+
+						elif conf["attack_type"] == "random label flipping attack":
+							if c.is_malicious:
+								diff = c.random_label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
+							else:
+								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+
+						elif conf["attack_type"] == "gaussian attack":
+							if c.is_malicious:
+								diff = c.gaussian_attack_train(edge_servers[i].global_model, c.client_id,
+															   conf["num_models"], num_malicious_clients)
+							else:
+								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+
 						else:
+							# conf["attack_type"] == "no attack":
 							diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
 
-					elif conf["attack_type"] == "label flipping attack":
-						if c.is_malicious:
-							diff = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
-																 conf["num_models"], num_malicious_clients)
-						else:
-							diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+						for name, params in edge_servers[i].global_model.state_dict().items():
+							edge_weights_accumulator[name].add_(diff[name])
 
-					elif conf["attack_type"] == "gaussian attack":
-						if c.is_malicious:
-							diff = c.gaussian_attack_train(edge_servers[i].global_model, c.client_id,
-														   conf["num_models"], num_malicious_clients)
-						else:
-							diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+						edge_weights_accumulator_list.append(edge_weights_accumulator)
 
-					else:
-						# conf["attack_type"] == "no attack":
-						diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
-
-					for name, params in edge_servers[i].global_model.state_dict().items():
-						edge_weights_accumulator[name].add_(diff[name])
-
-					edge_weights_accumulator_list.append(edge_weights_accumulator)
 
 		# for c in candidates:
 		# 	diff = c.local_train(server.global_model, c.client_id)
