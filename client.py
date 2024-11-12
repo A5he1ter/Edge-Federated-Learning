@@ -104,7 +104,8 @@ class Client(object):
 			global_value = model.state_dict()[name].to(device)
 			new_value = global_value + (data - global_value) * clip_rate
 			local_params[name].copy_(new_value)
-			diff[name] = (data - local_params[name])
+			# diff[name] = (data - local_params[name])
+			diff[name] = (local_params[name] - model.state_dict()[name])
 
 		# print("Client", c, "done. --scaling attack--")
 
@@ -116,7 +117,7 @@ class Client(object):
 		for name, param in model.state_dict().items():
 			self.local_model.state_dict()[name].copy_(param.clone())
 
-		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'], momentum=self.conf['momentum'])
+		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
 		self.local_model.train()
 
@@ -143,7 +144,7 @@ class Client(object):
 		for name, data in self.local_model.state_dict().items():
 			diff[name] = (data - model.state_dict()[name])
 
-		print("Client", c, "done. --LF attack--")
+		# print("Client", c, "done. --LF attack--")
 
 		return diff
 
@@ -151,7 +152,7 @@ class Client(object):
 		for name, param in model.state_dict().items():
 			self.local_model.state_dict()[name].copy_(param.clone())
 
-		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'], momentum=self.conf['momentum'])
+		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
 		self.local_model.train()
 
@@ -167,34 +168,37 @@ class Client(object):
 
 				optimizer.zero_grad()
 				output = self.local_model(data)
-				loss = torch.nn.functional.cross_entropy(output, target)
+				loss = torch.nn.functional.cross_entropy(output, target.long())
 				loss.backward()
 				optimizer.step()
 
-			local_params = self.local_model.state_dict()
+		local_params = self.local_model.state_dict()
 
-			for name, data in local_params.items():
-				noise = torch.randn(data.shape).to(device)
-				a = torch.mean(data.float())
-				b = torch.std(data.float())
-				data_GS = a + noise * b
-				local_params[name].copy_(data_GS)
+		for name, data in local_params.items():
+			noise = torch.randn(data.shape).to(device)
+			a = torch.mean(data.float())
+			b = torch.std(data.float())
+			data_GS = a + noise * b
+			local_params[name].copy_(data_GS)
 
-			diff = dict()
-			for name, data in local_params.items():
-				diff[name] = (data - model.state_dict()[name])
+		diff = dict()
+		for name, data in local_params.items():
+			diff[name] = (data - model.state_dict()[name])
 
-			print("Client", c, "done. --GS attack--")
-			return diff
+		return diff
 
-	def backdoor_attack_train(self, model, c, alpha=0.2):
+	def backdoor_attack_train(self, g_model, c, alpha=0.2):
 
-		for name, param in model.state_dict().items():
-			self.local_model.state_dict()[name].copy_(param.clone())
+		# self.local_model.load_state_dict(model, strict=True)
+
+		model = self.local_model
+		model.load_state_dict(g_model, strict=True)
+		model.train()
 
 		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
-		self.local_model.train()
+		# self.local_model.train()
+		model.train()
 
 		for e in range(self.conf["local_epochs"]):
 
@@ -205,26 +209,24 @@ class Client(object):
 					target[example_id] = 0
 				data = data.to(device)
 				target = target.to(device)
-				optimizer.zero_grad()
 
-				output = self.local_model(data)
-				loss = torch.nn.functional.cross_entropy(output, target)
+				# output = self.local_model(data)
+				output = model(data)
+				loss = torch.nn.functional.cross_entropy(output, target.long())
 				dist_loss_func = torch.nn.MSELoss()
 
 				if alpha > 0:
 					dist_loss = 0
-					for name, data in self.local_model.state_dict().items():
-						dist_loss += dist_loss_func(data, model.state_dict()[name].to(device))
+					for name, data in model.state_dict().items():
+						dist_loss += dist_loss_func(data, g_model[name].to(device))
+
 					loss += dist_loss * alpha
 
 				loss.backward()
 				optimizer.step()
+				optimizer.zero_grad()
 
-		# diff = dict()
-		# for name, data in self.local_model.state_dict().items():
-		# 	diff[name] = (data - model.state_dict()[name])
-		# print("Client", c, "done. --Backdoor attack--")
-		# return diff
-		local_params = self.local_model.state_dict()
+		# local_params = self.local_model.state_dict()
+		local_params = model.state_dict()
 		# print("Client", c, "done. --LIE attack--")
 		return local_params

@@ -11,6 +11,7 @@ import torch, random
 import matplotlib.pyplot as plt
 from sympy.codegen.ast import float32
 
+from LIE_attack import LIE_attack
 from cloud_server import *
 from edge_server import *
 from client import *
@@ -92,91 +93,46 @@ if __name__ == '__main__':
 			weight_accumulator[name] = torch.zeros_like(params)
 
 		if conf["attack_type"] == "a little enough attack":
-			z_values = {3: 0.69847, 5: 0.7054, 8: 0.71904, 10: 0.72575, 12: 0.73891, 28: 0.48}
-			malicious_params = []
-			clients_params = {}
-			diff = dict()
-			diff_dic = dict()
-			for i in range(conf["num_edge_servers"]):
-				for c in edge_servers[i].clients:
-					diff, local_params = c.local_train(edge_servers[i].global_model, c.client_id)
-					diff_dic[c] = diff
-					local_params_flatten = torch.cat([param.data.clone().view(-1) for key, param in local_params.items()], dim=0)
-					clients_params[c.client_id] = deepcopy(local_params_flatten.cpu())
-
-			global_params = server.global_model.state_dict()
-			original_params = torch.cat([param.data.clone().view(-1) for key, param in global_params.items()], dim=0).cpu()
-			user_grads = []
-			learning_rate = conf["lr"]
-
-			for i in range(conf["num_edge_servers"]):
-				for c in edge_servers[i].clients:
-					if c.is_malicious:
-						local_params = clients_params[c.client_id]
-						local_grads = (original_params - local_params) / learning_rate
-						user_grads =  local_grads[None, :] if len(user_grads) == 0 else torch.cat(
-							(user_grads, local_grads[None, :]), 0)
-
-			grads_mean = torch.mean(user_grads, dim=0)
-			grads_stdev = torch.std(user_grads, dim=0)
-
-			params_mean = original_params - learning_rate * grads_mean
-
-			global_temp_params = OrderedDict()
-			start_idx = 0
-
-			for name, data in server.global_model.state_dict().items():
-				param = params_mean[start_idx: start_idx + len(data.data.view(-1))].reshape(data.data.shape)
-				start_idx = start_idx + len(data.data.view(-1))
-				global_temp_params[name] = deepcopy(param)
-
-			mal_client_params = {}
-			user_params = []
-			alpha = 0.1
-			for i in range(conf["num_edge_servers"]):
-				for c in edge_servers[i].clients:
-					if c.is_malicious:
-						local_temp_params = c.backdoor_attack_train(edge_servers[i].global_model, c.client_id, alpha)
-						local_temp_params_flatten = torch.cat([param.data.clone().view(-1) for key, param in local_temp_params.items()], dim=0).cpu()
-						clients_params[c.client_id] = deepcopy(local_temp_params_flatten)
-						user_params = local_temp_params_flatten[None, :] if len(user_params) == 0 else torch.cat(
-							(user_params, local_temp_params_flatten[None, :]), 0
-						)
-			params_temp_mean = torch.mean(user_params, dim=0)
-
-			new_params = params_temp_mean + learning_rate * grads_mean
-			new_grads = (params_mean - new_params) / learning_rate
-
-			num_std = z_values[3]
-			new_user_grads = np.clip(new_grads, grads_mean - num_std * grads_stdev,
-									 grads_mean + num_std * grads_stdev)
-
-			mal_params = original_params - learning_rate * new_user_grads
-
-			diff_temp = dict()
-			mal_state_dict = dict()
+			client_params = LIE_attack(edge_servers, conf["lr"], server.global_model)
+			mal_state_dict = {}
+			benign_state_dict = {}
 			for i in range(conf["num_edge_servers"]):
 				for name, params in server.global_model.state_dict().items():
 					edge_weights_accumulator[name] = torch.zeros_like(params)
+
 				for c in edge_servers[i].clients:
+					diff_temp = dict()
 					if c.is_malicious:
+						mal_params = client_params[c.client_id]
 						start_idx = 0
-						for name, data in server.global_model.state_dict().items():
+						for name, data in c.local_model.state_dict().items():
 							param = mal_params[start_idx: start_idx + len(data.data.view(-1))].reshape(data.data.shape)
-							param = param.to(device)
 							start_idx = start_idx + len(data.data.view(-1))
 							mal_state_dict[name] = deepcopy(param)
+
 						c.local_model.load_state_dict(mal_state_dict, strict=True)
 
-						for name, params in server.global_model.state_dict().items():
-							diff_temp[name] = params - c.local_model.state_dict()[name]
+						# local_acc, local_loss = server.eval(c.local_model)
+						# local_asr = server.ASR(c.local_model)
+						# print('[LIT_attack %s] accuracy: %f  loss: %f asr: %f' % (c.client_id, local_acc, local_loss, local_asr))
+
+						for name, params in edge_servers[i].global_model.state_dict().items():
+							diff_temp[name] = (c.local_model.state_dict()[name] - params)
 							edge_weights_accumulator[name].add_(diff_temp[name])
-						edge_weights_accumulator_list.append(edge_weights_accumulator)
 					else:
-						for name, params in server.global_model.state_dict().items():
-							diff_temp[name] = params - c.local_model.state_dict()[name]
+						benign_params = client_params[c.client_id]
+						start_idx = 0
+						for name, data in c.local_model.state_dict().items():
+							param = benign_params[start_idx: start_idx + len(data.data.view(-1))].reshape(data.data.shape)
+							start_idx = start_idx + len(data.data.view(-1))
+							benign_state_dict[name] = deepcopy(param)
+						c.local_model.load_state_dict(benign_state_dict, strict=True)
+
+						for name, params in edge_servers[i].global_model.state_dict().items():
+							diff_temp[name] = (c.local_model.state_dict()[name] - params)
 							edge_weights_accumulator[name].add_(diff_temp[name])
-						edge_weights_accumulator_list.append(edge_weights_accumulator)
+
+				edge_weights_accumulator_list.append(edge_weights_accumulator)
 		else:
 			for i in range(conf["num_edge_servers"]):
 				for name, params in server.global_model.state_dict().items():
@@ -210,7 +166,7 @@ if __name__ == '__main__':
 						# conf["attack_type"] == "no attack":
 						diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
 
-					for name, params in server.global_model.state_dict().items():
+					for name, params in edge_servers[i].global_model.state_dict().items():
 						edge_weights_accumulator[name].add_(diff[name])
 
 					edge_weights_accumulator_list.append(edge_weights_accumulator)
@@ -246,15 +202,15 @@ if __name__ == '__main__':
 		
 
 		if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
-			asr = server.ASR()
+			asr = server.ASR(server.global_model)
 			global_asr_list.append(asr)
-			print("Epoch %d, acc: %f, loss: %f, asr: %f\n" % (e, acc, loss, asr))
+			print("Epoch %d acc: %f loss: %f asr: %f\n" % (e, acc, loss, asr))
 		else:
-			print("Epoch %d, acc: %f, loss: %f\n" % (e, acc, loss))
+			print("Epoch %d acc: %f loss: %f\n" % (e, acc, loss))
 
 	# global model accuracy fig
 	plt.figure()
-	plt.plot(range(0, conf["global_epochs"] - 1), global_acc_list, 'r', label='Accuracy')
+	plt.plot(range(len(global_acc_list)), global_acc_list, 'r', label='Accuracy')
 	plt.xlabel('Epoch')
 	plt.ylabel('Accuracy')
 	plt.title('Global Model Accuracy')
@@ -263,7 +219,7 @@ if __name__ == '__main__':
 
 	# global model loss fig
 	plt.figure()
-	plt.plot(range(0, conf["global_epochs"] - 1), global_loss_list, 'b', label='Loss')
+	plt.plot(range(len(global_loss_list)), global_loss_list, 'b', label='Loss')
 	plt.xlabel('Epoch')
 	plt.ylabel('Loss')
 	plt.title('Global Model Loss')
@@ -274,7 +230,7 @@ if __name__ == '__main__':
 	# global asr fig
 	if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
 		plt.figure()
-		plt.plot(range(0, conf["global_epochs"] - 1), global_asr_list, 'g', label='ASR')
+		plt.plot(range(len(global_asr_list)), global_asr_list, 'g', label='ASR')
 		plt.xlabel('Epoch')
 		plt.ylabel('ASR')
 		plt.title('ASR')

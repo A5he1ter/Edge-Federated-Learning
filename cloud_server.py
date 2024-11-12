@@ -75,13 +75,12 @@ class Server(object):
 			pred = output.data.max(1)[1]  # get the index of the max log-probability
 			correct += pred.eq(target.data.view_as(pred)).cpu().sum().item()
 
-		acc = 100.0 * (float(correct) / float(dataset_size))
+		acc =  float(correct) / float(dataset_size)
 		total_l = total_loss / dataset_size
 
 		return acc, total_l
 
-	def ASR(self):
-		self.global_model.eval()
+	def ASR(self, model):
 		sum_ASR = 0
 		count = 0
 		for batch_id, batch in enumerate(self.eval_loader):
@@ -93,7 +92,7 @@ class Server(object):
 			for example_id in range(data.shape[0]):
 				data[example_id] = Adding_Trigger(data[example_id])
 
-			output = self.global_model(data)
+			output = model(data)
 			output = torch.argmax(output, dim=1)
 
 			for i, v in enumerate(output):
@@ -104,3 +103,32 @@ class Server(object):
 
 		asr = count / sum_ASR
 		return asr
+
+	def eval(self, model):
+		model.eval()
+
+		total_loss = 0.0
+		correct = 0
+		dataset_size = 0
+		for batch_id, batch in enumerate(self.eval_loader):
+			data, target = batch
+			dataset_size += data.size()[0]
+
+			data = data.to(device)
+			target = target.to(device)
+
+			# if torch.cuda.is_available():
+			# 	data = data.cuda()
+			# 	target = target.cuda()
+
+			output = model(data)
+
+			total_loss += torch.nn.functional.cross_entropy(output, target,
+															reduction='sum').item()  # sum up batch loss
+			pred = output.data.max(1)[1]  # get the index of the max log-probability
+			correct += pred.eq(target.data.view_as(pred)).cpu().sum().item()
+
+		acc = 100.0 * (float(correct) / float(dataset_size))
+		total_l = total_loss / dataset_size
+
+		return acc, total_l

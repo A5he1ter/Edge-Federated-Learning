@@ -6,7 +6,7 @@
 
 	"malicious_ratio": 0.4,
 
-	"attack_type": "a little enough attack",
+	"attack_type": "gaussian attack",
 
 	"num_edge_servers": 10,
 	
