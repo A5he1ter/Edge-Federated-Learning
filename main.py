@@ -17,6 +17,14 @@ from edge_server import *
 from client import *
 import models, datasets
 
+device = None
+if torch.backends.mps.is_available():
+	device = torch.device('mps')
+elif torch.cuda.is_available():
+	device = torch.device('cuda')
+else:
+	device = torch.device('cpu')
+
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Federated Learning')
@@ -42,6 +50,7 @@ if __name__ == '__main__':
 	print("恶意客户端数量", num_malicious_clients)
 	malicious_clients = random.sample(range(conf["num_models"]), num_malicious_clients)
 	print("恶意客户端", malicious_clients)
+	print("device", device)
 
 	for c in range(conf["num_models"]):
 		if c in malicious_clients:
