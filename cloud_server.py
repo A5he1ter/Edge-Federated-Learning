@@ -35,12 +35,7 @@ class Server(object):
 	def model_aggregate(self, weight_accumulator_list):
 		for i in range(self.conf["num_edge_servers"]):
 			for name, data in self.global_model.state_dict().items():
-				update_per_layer = weight_accumulator_list[i][name] * self.conf["lambda"]
-
-				if data.type() != update_per_layer.type():
-					data.add_(update_per_layer.to(torch.int64))
-				else:
-					data.add_(update_per_layer)
+				data.add_(weight_accumulator_list[i][name] * self.conf["lambda"])
 
 	def send_global_model_to_edge_servers(self):
 		for i in range(self.conf["num_edge_servers"]):

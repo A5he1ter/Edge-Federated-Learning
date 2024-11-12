@@ -19,6 +19,6 @@ class EdgeServer:
 
     def edge_model_aggregate(self, edge_weight_accumulator, edge_aggregate_result):
         for name, data in edge_weight_accumulator.items():
-            edge_aggregate_result[name].add_((edge_weight_accumulator[name] * self.conf["edge_lambda"]).to(torch.int64))
+            edge_aggregate_result[name].add_((edge_weight_accumulator[name] * self.conf["edge_lambda"]))
 
         return edge_aggregate_result
