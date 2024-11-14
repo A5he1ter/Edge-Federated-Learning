@@ -8,8 +8,8 @@ import models
 import torch
 import copy
 import numpy as np
-from utils import adding_trigger
-from utils.adding_trigger import Adding_Trigger
+from utils import utils
+from utils.utils import Adding_Trigger
 from tqdm import tqdm
 
 device = None
@@ -57,7 +57,7 @@ class Client(object):
 			
 				optimizer.zero_grad()
 				output = self.local_model(data)
-				loss = torch.nn.functional.cross_entropy(output, target)
+				loss = torch.nn.functional.cross_entropy(output, target.long())
 				loss.backward()
 			
 				optimizer.step()
@@ -134,7 +134,7 @@ class Client(object):
 
 				optimizer.zero_grad()
 				output = self.local_model(data)
-				loss = torch.nn.functional.cross_entropy(output, target)
+				loss = torch.nn.functional.cross_entropy(output, target.long())
 				loss.backward()
 				optimizer.step()
 
@@ -166,7 +166,7 @@ class Client(object):
 
 				optimizer.zero_grad()
 				output = self.local_model(data)
-				loss = torch.nn.functional.cross_entropy(output, target)
+				loss = torch.nn.functional.cross_entropy(output, target.long())
 				loss.backward()
 				optimizer.step()
 

@@ -4,9 +4,11 @@
 
 	"num_models" : 100,
 
-	"malicious_ratio": 0.4,
+	"malicious_ratio": 0.28,
 
-	"attack_type": "gaussian attack",
+	"attack_type": "label flipping attack",
+
+	"detect_type": "multi krum",
 
 	"num_edge_servers": 10,
 	

@@ -2,7 +2,7 @@ import torch
 
 from models import models
 from edge_server import *
-from utils.adding_trigger import Adding_Trigger
+from utils.utils import Adding_Trigger
 
 device = None
 if torch.backends.mps.is_available():
@@ -35,6 +35,7 @@ class Server(object):
 	def model_aggregate(self, weight_accumulator_list):
 		for i in range(self.conf["num_edge_servers"]):
 			for name, data in self.global_model.state_dict().items():
+				data = data.float()
 				data.add_(weight_accumulator_list[i][name] * self.conf["lambda"])
 
 	def send_global_model_to_edge_servers(self):

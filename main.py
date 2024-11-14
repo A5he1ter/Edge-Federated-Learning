@@ -17,6 +17,8 @@ from edge_server import *
 from client import *
 import models, datasets
 from tqdm import tqdm
+from detect import multi_krum
+from utils.utils import eval_defense_acc
 
 device = None
 if torch.backends.mps.is_available():
@@ -47,24 +49,40 @@ if __name__ == '__main__':
 	client_groups = []
 
 	# 创建客户端，并标记恶意客户端
-	num_malicious_clients = int(conf["malicious_ratio"] * conf["num_models"])
-	print("num of edge servers:", num_client_groups)
-	print("num of clients:", conf["num_models"])
-	print("num of malicious clients:", num_malicious_clients)
-	malicious_clients = random.sample(range(conf["num_models"]), num_malicious_clients)
-	print("malicious clients:", malicious_clients)
-	print("num of global epochs:", conf["global_epochs"])
-	print("device:", device)
-	print("attack type:", conf["attack_type"])
-	print("dataset:", conf["type"])
-
-	for c in range(conf["num_models"]):
-		if c in malicious_clients:
-			# TODO 如有需要，给恶意客户端分配特定数据集
-			clients.append(Client(conf, server.global_model, train_datasets, True, c))
-		else:
-			# 良性客户端
+	if conf["attack_type"] == "no attack":
+		print("num of edge servers:", num_client_groups)
+		print("num of clients:", conf["num_models"])
+		print("num of global epochs:", conf["global_epochs"])
+		print("device:", device)
+		print("attack type:", conf["attack_type"])
+		print("detect type:", conf["detect_type"])
+		print("dataset:", conf["type"])
+		for c in range(conf["num_models"]):
 			clients.append(Client(conf, server.global_model, train_datasets, False, c))
+	else:
+		num_malicious_clients = int(conf["malicious_ratio"] * conf["num_models"])
+		print("num of edge servers:", num_client_groups)
+		print("num of clients:", conf["num_models"])
+		print("num of malicious clients:", num_malicious_clients)
+		malicious_clients = random.sample(range(conf["num_models"]), num_malicious_clients)
+		print("malicious clients:", malicious_clients)
+		print("num of global epochs:", conf["global_epochs"])
+		print("device:", device)
+		print("attack type:", conf["attack_type"])
+		print("detect type:", conf["detect_type"])
+		print("dataset:", conf["type"])
+		for c in range(conf["num_models"]):
+			if c in malicious_clients:
+				# TODO 如有需要，给恶意客户端分配特定数据集
+				clients.append(Client(conf, server.global_model, train_datasets, True, c))
+			else:
+				# 良性客户端
+				clients.append(Client(conf, server.global_model, train_datasets, False, c))
+
+		malicious_clients_list = []
+		for c in clients:
+			if c.is_malicious:
+				malicious_clients_list.append(c)
 
 
 	# for c in range(conf["num_models"]):
@@ -82,6 +100,9 @@ if __name__ == '__main__':
 	for i in range(conf["num_edge_servers"]):
 		edge_servers.append(EdgeServer(conf, i, server.global_model, client_groups[i]))
 
+	for i in range(conf["num_edge_servers"]):
+		edge_servers[i].know_num_malicious()
+
 	# 将边缘服务器分配至云服务器下
 	server.set_edge_servers(edge_servers)
 
@@ -93,10 +114,15 @@ if __name__ == '__main__':
 	global_loss_list = []
 	global_asr_list = []
 
+	defense_acc_list = []
+	malicious_precision_list = []
+	malicious_recall_list = []
+
+
 	# 进行全局训练
 	print("\n\n")
 	for e in range(conf["global_epochs"]):
-	
+		detect_malicious_client = []
 		# candidates = random.sample(clients, conf["k"])
 
 		# 设置并初始化一系列列表与数组收集模型参数
@@ -188,10 +214,21 @@ if __name__ == '__main__':
 							# conf["attack_type"] == "no attack":
 							diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
 
-						for name, params in edge_servers[i].global_model.state_dict().items():
-							edge_weights_accumulator[name].add_(diff[name])
+						edge_servers[i].collect_clients_diff(diff, c.client_id)
 
-						edge_weights_accumulator_list.append(edge_weights_accumulator)
+					if conf["detect_type"] == "multi krum":
+						benign_clients_params_update, detected_malicious = multi_krum(edge_servers[i])
+
+						for diff in benign_clients_params_update:
+							edge_servers[i].clients_diff_list = benign_clients_params_update
+
+						detect_malicious_client += detected_malicious
+
+
+						# for name, params in edge_servers[i].global_model.state_dict().items():
+						# 	edge_weights_accumulator[name].add_(diff[name])
+
+					# edge_weights_accumulator_list.append(edge_servers[i].clients_diff_list)
 
 
 		# for c in candidates:
@@ -208,55 +245,86 @@ if __name__ == '__main__':
 
 		weights_accumulator_list = []
 
+
 		for i in range(conf["num_edge_servers"]):
 			for name, params in server.global_model.state_dict().items():
-				edge_aggregate_result[name] = torch.zeros_like(params)
+				edge_aggregate_result[name] = (torch.zeros_like(params)).float()
 
 			# print("边缘服务器", i, "聚合开始")
-			weights_accumulator_list.append(edge_servers[i].edge_model_aggregate(edge_weights_accumulator_list[i], edge_aggregate_result))
+			weights_accumulator_list.append(edge_servers[i].edge_model_aggregate(edge_servers[i].clients_diff_list, edge_aggregate_result))
 			# print("边缘服务器", i, "聚合完成")
-		
+
+
 		server.model_aggregate(weights_accumulator_list)
 
 		acc, loss = server.model_eval()
 
 		global_acc_list.append(acc)
 		global_loss_list.append(loss)
-		
+
 
 		if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
 			asr = server.ASR(server.global_model)
 			global_asr_list.append(asr)
-			print("Epoch %d acc: %f loss: %f asr: %f\n" % (e, acc, loss, asr))
+			print("Epoch %d acc: %f loss: %f asr: %f" % (e, acc, loss, asr))
 		else:
-			print("Epoch %d acc: %f loss: %f\n" % (e, acc, loss))
+			print("Epoch %d acc: %f loss: %f" % (e, acc, loss))
+
+		if conf["attack_type"] != "no attack":
+			defense_acc, malicious_precision, malicious_recall = eval_defense_acc(clients, malicious_clients_list, detect_malicious_client)
+			defense_acc_list.append(defense_acc)
+			malicious_precision_list.append(malicious_precision)
+			malicious_recall_list.append(malicious_recall)
+			print("defense acc: %f malicious precision: %f malicious recall: %f" % (defense_acc, malicious_precision, malicious_recall))
+
+	fig, axes = plt.subplots(2, 3, figsize=(15, 15))
 
 	# global model accuracy fig
-	plt.figure()
-	plt.plot(range(len(global_acc_list)), global_acc_list, 'r', label='Accuracy')
-	plt.xlabel('Epoch')
-	plt.ylabel('Accuracy')
-	plt.title('Global Model Accuracy')
-	plt.legend()
-	plt.savefig('./fig/acc '+str(conf["type"])+" "+str(conf["attack_type"])+".png")
+	axes[0, 0].plot(range(len(global_acc_list)), global_acc_list, 'r-o', label='Accuracy')
+	axes[0, 0].set_xlabel('Epoch')
+	axes[0, 0].set_ylabel('Accuracy')
+	axes[0, 0].set_title('Global Model Accuracy')
+	axes[0, 0].legend()
+	# plt.savefig('./fig/acc '+str(conf["type"])+" "+str(conf["attack_type"])+" "+str(conf["detect_type"])+".png")
 
 	# global model loss fig
-	plt.figure()
-	plt.plot(range(len(global_loss_list)), global_loss_list, 'b', label='Loss')
-	plt.xlabel('Epoch')
-	plt.ylabel('Loss')
-	plt.title('Global Model Loss')
-	plt.legend()
-	plt.savefig('./fig/loss ' + str(conf["type"]) + " " + str(conf["attack_type"]) + ".png")
-	plt.show()
+	axes[0, 1].plot(range(len(global_loss_list)), global_loss_list, 'b-o', label='Loss')
+	axes[0, 1].set_xlabel('Epoch')
+	axes[0, 1].set_ylabel('Loss')
+	axes[0, 1].set_title('Global Model Loss')
+	axes[0, 1].legend()
+	# plt.savefig('./fig/loss ' + str(conf["type"]) + " " + str(conf["attack_type"]) + str(conf["detect_type"]) + ".png")
 
 	# global asr fig
 	if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
-		plt.figure()
-		plt.plot(range(len(global_asr_list)), global_asr_list, 'g', label='ASR')
-		plt.xlabel('Epoch')
-		plt.ylabel('ASR')
-		plt.title('ASR')
-		plt.legend()
-		plt.savefig('./fig/asr ' + str(conf["type"]) + " " + str(conf["attack_type"]) + ".png")
+		axes[0, 2].plot(range(len(global_asr_list)), global_asr_list, 'g-o', label='ASR')
+		axes[0, 2].set_xlabel('Epoch')
+		axes[0, 2].set_ylabel('ASR')
+		axes[0, 2].set_title('ASR')
+		axes[0, 2].legend()
+		# plt.savefig('./fig/asr ' + str(conf["type"]) + " " + str(conf["attack_type"]) + str(conf["detect_type"])+ ".png")
+
+	if conf["attack_type"] != "no attack":
+		axes[1, 0].plot(range(len(defense_acc_list)), defense_acc_list, 'y-o', label='Defense Accuracy')
+		axes[1, 0].set_xlabel('Epoch')
+		axes[1, 0].set_ylabel('Defense Accuracy')
+		axes[1, 0].set_title('Defense Accuracy')
+		axes[1, 0].legend()
+
+		axes[1, 1].plot(range(len(malicious_precision_list)), malicious_precision_list, 'k-o', label='Malicious Precision')
+		axes[1, 1].set_xlabel('Epoch')
+		axes[1, 1].set_ylabel('Malicious Precision')
+		axes[1, 1].set_title('Malicious Precision')
+		axes[1, 1].legend()
+
+		axes[1, 2].plot(range(len(malicious_recall_list)), malicious_recall_list, 'm-o', label='Malicious Recall')
+		axes[1, 2].set_xlabel('Epoch')
+		axes[1, 2].set_ylabel('Malicious Recall')
+		axes[1, 2].set_title('Malicious Recall')
+		axes[1, 2].legend()
+
+		plt.tight_layout(pad=0.1)
+
+		plt.savefig('./fig/' + conf["type"] + " " + conf["attack_type"] + " " + conf["detect_type"] + ".png")
+
 		plt.show()
