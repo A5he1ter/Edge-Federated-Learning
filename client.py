@@ -195,10 +195,9 @@ class Client(object):
 			a = torch.mean(data.float())
 			b = torch.std(data.float())
 			data_GS = a + noise * b
-			data.copy_(data_GS)
+			local_params[name].copy_(data_GS)
 
 		# self.eval_local_model()
-
 		return local_params
 
 	def backdoor_attack_train(self, g_model, c, alpha=0.2):

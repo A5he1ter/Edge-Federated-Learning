@@ -211,14 +211,12 @@ if __name__ == '__main__':
 						edge_servers[i].set_local_params(local_params, c.client_id)
 
 				if conf["detect_type"] == "multi krum":
-					benign_clients_params, detected_malicious = multi_krum(edge_servers[i])
-
-					edge_servers[i].local_params_list = benign_clients_params
-
+					sub_global_params_flatten, detected_malicious = multi_krum(edge_servers[i])
 					detect_malicious_client += detected_malicious
-
-				sub_global_params_flatten = edge_servers[i].edge_model_aggregate()
+				else:
+					sub_global_params_flatten = edge_servers[i].edge_model_aggregate()
 				weights_accumulator_list.append(sub_global_params_flatten)
+				edge_servers[i].local_params_list = {}
 
 		server.global_model.load_state_dict(server.model_aggregate(weights_accumulator_list))
 

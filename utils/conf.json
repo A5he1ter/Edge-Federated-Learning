@@ -8,7 +8,7 @@
 
 	"attack_type": "gaussian attack",
 
-	"detect_type": "",
+	"detect_type": "multi krum",
 
 	"num_edge_servers": 10,
 	

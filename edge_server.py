@@ -21,8 +21,8 @@ class EdgeServer:
 
     def edge_model_aggregate(self):
         user_grads = []
-        for c in self.clients:
-            local_params = self.local_params_list[c.client_id]
+        for c in self.local_params_list:
+            local_params = self.local_params_list[c]
             local_params_flatten = torch.cat([param.data.clone().view(-1) for key, param in local_params.items()],
                                              dim=0)
             user_grads = local_params_flatten[None, :] if len(user_grads) == 0 else torch.cat(
