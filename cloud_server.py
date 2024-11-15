@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 
 from models import models
@@ -32,15 +34,29 @@ class Server(object):
 	def set_edge_servers(self, edge_servers):
 		self.edge_servers = edge_servers
 
-	def model_aggregate(self, weight_accumulator_list):
-		for i in range(self.conf["num_edge_servers"]):
-			for name, data in self.global_model.state_dict().items():
-				data = data.float()
-				data.add_(weight_accumulator_list[i][name] * self.conf["lambda"])
+	# def model_aggregate(self, weight_accumulator_list):
+	# 	for i in range(self.conf["num_edge_servers"]):
+	# 		for name, data in self.global_model.state_dict().items():
+	# 			data.add_((weight_accumulator_list[i][name] * self.conf["lambda"]).long())
 
-	def send_global_model_to_edge_servers(self):
-		for i in range(self.conf["num_edge_servers"]):
-			self.edge_servers[i].set_global_model(self.global_model)
+	def model_aggregate(self, weight_accumulator_list):
+		grads = []
+		global_params = {}
+		for i in range(len(weight_accumulator_list)):
+			sub_global_params_flatten = weight_accumulator_list[i]
+			grads = sub_global_params_flatten[None, :] if len(grads) == 0 else torch.cat(
+				(grads, sub_global_params_flatten[None, :]), 0
+			)
+
+		global_params_flatten = torch.mean(grads, dim=0)
+
+		idx = 0
+		for key, val in self.global_model.state_dict().items():
+			param = global_params_flatten[idx: idx + len(val.data.view(-1))].reshape(val.data.shape)
+			idx = idx + len(val.data.view(-1))
+			global_params[key] = deepcopy(param)
+
+		return global_params
 
 	def model_eval(self):
 		self.global_model.eval()

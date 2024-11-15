@@ -1,13 +1,7 @@
-import argparse, json
-import datetime
-import os
-import logging
-from collections import OrderedDict
 from copy import deepcopy
-from curses.ascii import isxdigit
 
-import numpy as np
-import torch, random
+import torch
+import random
 import matplotlib.pyplot as plt
 from sympy.codegen.ast import float32
 
@@ -47,6 +41,7 @@ if __name__ == '__main__':
 	clients = []
 	num_client_groups = conf["num_edge_servers"]
 	client_groups = []
+	num_malicious_clients = 0
 
 	# 创建客户端，并标记恶意客户端
 	if conf["attack_type"] == "no attack":
@@ -58,7 +53,7 @@ if __name__ == '__main__':
 		print("detect type:", conf["detect_type"])
 		print("dataset:", conf["type"])
 		for c in range(conf["num_models"]):
-			clients.append(Client(conf, server.global_model, train_datasets, False, c))
+			clients.append(Client(conf, server.global_model, train_datasets, eval_datasets, False, c))
 	else:
 		num_malicious_clients = int(conf["malicious_ratio"] * conf["num_models"])
 		print("num of edge servers:", num_client_groups)
@@ -74,10 +69,10 @@ if __name__ == '__main__':
 		for c in range(conf["num_models"]):
 			if c in malicious_clients:
 				# TODO 如有需要，给恶意客户端分配特定数据集
-				clients.append(Client(conf, server.global_model, train_datasets, True, c))
+				clients.append(Client(conf, server.global_model, train_datasets, eval_datasets, True, c))
 			else:
 				# 良性客户端
-				clients.append(Client(conf, server.global_model, train_datasets, False, c))
+				clients.append(Client(conf, server.global_model, train_datasets, eval_datasets, False, c))
 
 		malicious_clients_list = []
 		for c in clients:
@@ -109,6 +104,8 @@ if __name__ == '__main__':
 	# for i in range(len(edge_servers)):
 	# 	print("边缘服务器id", edge_servers[i].server_id, "该边缘服务器下客户端数量", len(edge_servers[i].clients))
 
+
+
 	# 收集全局迭代过程中全局模型的测试准确率与损失，以便后续画图
 	global_acc_list = []
 	global_loss_list = []
@@ -128,10 +125,7 @@ if __name__ == '__main__':
 		# 设置并初始化一系列列表与数组收集模型参数
 		edge_weights_accumulator = dict()
 		edge_weights_accumulator_list = []
-		edge_aggregate_result = {}
-		weight_accumulator = {}
-		for name, params in server.global_model.state_dict().items():
-			weight_accumulator[name] = torch.zeros_like(params)
+		weights_accumulator_list = []
 
 		if conf["attack_type"] == "a little enough attack":
 			client_params = LIE_attack(edge_servers, conf["lr"], server.global_model)
@@ -177,85 +171,59 @@ if __name__ == '__main__':
 		else:
 			for i in range(conf["num_edge_servers"]):
 				with tqdm(edge_servers[i].clients, total=len(edge_servers[i].clients), desc=f"Edge Server {i+1}/{conf['num_edge_servers']}", ncols=120) as pbar:
-					for name, params in server.global_model.state_dict().items():
-						edge_weights_accumulator[name] = torch.zeros_like(params)
+					# for name, params in server.global_model.state_dict().items():
+					# 	edge_weights_accumulator[name] = torch.zeros_like(params)
 
 					# 本地训练与攻击
 					for c in pbar:
-						diff = dict()
+						local_params = None
 						if conf["attack_type"] == "scaling attack":
 							if c.is_malicious:
-								diff = c.scaling_attack_train(edge_servers[i].global_model, c.client_id,
+								local_params = c.scaling_attack_train(edge_servers[i].global_model, c.client_id,
 														  conf["num_models"], num_malicious_clients)
 							else:
-								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
 						elif conf["attack_type"] == "label flipping attack":
 							if c.is_malicious:
-								diff = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
+								local_params = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
 																	 conf["num_models"], num_malicious_clients)
 							else:
-								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
 						elif conf["attack_type"] == "random label flipping attack":
 							if c.is_malicious:
-								diff = c.random_label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
+								local_params = c.random_label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
 							else:
-								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
 						elif conf["attack_type"] == "gaussian attack":
 							if c.is_malicious:
-								diff = c.gaussian_attack_train(edge_servers[i].global_model, c.client_id,
+								local_params = c.gaussian_attack_train(edge_servers[i].global_model, c.client_id,
 															   conf["num_models"], num_malicious_clients)
 							else:
-								diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
 						else:
 							# conf["attack_type"] == "no attack":
-							diff, _ = c.local_train(edge_servers[i].global_model, c.client_id)
+							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
-						edge_servers[i].collect_clients_diff(diff, c.client_id)
+						edge_servers[i].set_local_params(local_params, c.client_id)
 
-					if conf["detect_type"] == "multi krum":
-						benign_clients_params_update, detected_malicious = multi_krum(edge_servers[i])
+				if conf["detect_type"] == "multi krum":
+					benign_clients_params, detected_malicious = multi_krum(edge_servers[i])
 
-						for diff in benign_clients_params_update:
-							edge_servers[i].clients_diff_list = benign_clients_params_update
+					edge_servers[i].local_params_list = benign_clients_params
 
-						detect_malicious_client += detected_malicious
+					detect_malicious_client += detected_malicious
 
+				sub_global_params_flatten = edge_servers[i].edge_model_aggregate()
+				weights_accumulator_list.append(sub_global_params_flatten)
 
-						# for name, params in edge_servers[i].global_model.state_dict().items():
-						# 	edge_weights_accumulator[name].add_(diff[name])
-
-					# edge_weights_accumulator_list.append(edge_servers[i].clients_diff_list)
-
-
-		# for c in candidates:
-		# 	diff = c.local_train(server.global_model, c.client_id)
-		#
-		# 	for name, params in server.global_model.state_dict().items():
-		# 		edge_weights_accumulator[name] = torch.zeros_like(params)
-		#
-		# 	for name, params in server.global_model.state_dict().items():
-		# 		edge_weights_accumulator[name].add_(diff[name])
-			
-			# for name, params in server.global_model.state_dict().items():
-			# 	weight_accumulator[name].add_(diff[name])
-
-		weights_accumulator_list = []
-
+		server.global_model.load_state_dict(server.model_aggregate(weights_accumulator_list))
 
 		for i in range(conf["num_edge_servers"]):
-			for name, params in server.global_model.state_dict().items():
-				edge_aggregate_result[name] = (torch.zeros_like(params)).float()
-
-			# print("边缘服务器", i, "聚合开始")
-			weights_accumulator_list.append(edge_servers[i].edge_model_aggregate(edge_servers[i].clients_diff_list, edge_aggregate_result))
-			# print("边缘服务器", i, "聚合完成")
-
-
-		server.model_aggregate(weights_accumulator_list)
+			edge_servers[i].set_global_model(server.global_model)
 
 		acc, loss = server.model_eval()
 
@@ -277,7 +245,10 @@ if __name__ == '__main__':
 			malicious_recall_list.append(malicious_recall)
 			print("defense acc: %f malicious precision: %f malicious recall: %f" % (defense_acc, malicious_precision, malicious_recall))
 
-	fig, axes = plt.subplots(2, 3, figsize=(15, 15))
+		for i in range(conf["num_edge_servers"]):
+			edge_servers[i].set_global_model(server.global_model)
+
+	fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
 	# global model accuracy fig
 	axes[0, 0].plot(range(len(global_acc_list)), global_acc_list, 'r-o', label='Accuracy')
@@ -323,8 +294,8 @@ if __name__ == '__main__':
 		axes[1, 2].set_title('Malicious Recall')
 		axes[1, 2].legend()
 
-		plt.tight_layout(pad=0.1)
+	plt.tight_layout(pad=0.1)
 
-		plt.savefig('./fig/' + conf["type"] + " " + conf["attack_type"] + " " + conf["detect_type"] + ".png")
+	plt.savefig('./fig/' + conf["type"] + " " + conf["attack_type"] + " " + conf["detect_type"] + ".png")
 
-		plt.show()
+	plt.show()

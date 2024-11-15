@@ -53,6 +53,17 @@ def eval_defense_acc(clients, malicious_clients, detect_malicious_client):
     #     if m_c[key] == val:
     #         count += 1
 
+    malicious = []
+    for i in malicious_clients:
+        malicious.append(i.client_id)
+    malicious.sort()
+    print("malicious clients", malicious)
+    malicious = []
+    for i in detect_malicious_client:
+        malicious.append(i.client_id)
+    malicious.sort()
+    print("detected malicious clients", malicious)
+
     count = 0
     for c in clients:
         if (c in detect_malicious_client) == (c in malicious_clients):

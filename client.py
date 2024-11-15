@@ -21,11 +21,12 @@ else:
 	device = torch.device('cpu')
 
 class Client(object):
-	def __init__(self, conf, model, train_dataset, is_malicious, id = -1):
+	def __init__(self, conf, model, train_dataset, eval_dataset, is_malicious, id = -1):
 		self.conf = conf
 		self.local_model = model
 		self.client_id = id
 		self.train_dataset = train_dataset
+		self.eval_dataset = eval_dataset
 		self.is_malicious = is_malicious
 		
 		all_range = list(range(len(self.train_dataset)))
@@ -34,6 +35,7 @@ class Client(object):
 
 		self.train_loader = torch.utils.data.DataLoader(self.train_dataset, batch_size=conf["batch_size"], 
 									sampler=torch.utils.data.sampler.SubsetRandomSampler(train_indices))
+		self.eval_loader = torch.utils.data.DataLoader(eval_dataset, batch_size=self.conf["batch_size"], shuffle=True)
 									
 	def local_train(self, model, c):
 
@@ -63,11 +65,9 @@ class Client(object):
 				optimizer.step()
 			# print("Client", c,"Epoch %d done." % e)
 		# print("Client", c, "done.")
-		diff = dict()
-		for name, data in self.local_model.state_dict().items():
-			diff[name] = (data - model.state_dict()[name])
-			
-		return diff, self.local_model.state_dict()
+		# self.eval_local_model()
+
+		return self.local_model.state_dict()
 
 	def scaling_attack_train(self, model, c, num_clients, num_malicious_clients):
 		for name, param in model.state_dict().items():
@@ -96,18 +96,16 @@ class Client(object):
 				optimizer.step()
 		local_params = self.local_model.state_dict()
 
-		diff = dict()
 		clip_rate = (num_clients / num_malicious_clients) / 2
 		for name, data in self.local_model.state_dict().items():
 			global_value = model.state_dict()[name].to(device)
 			new_value = global_value + (data - global_value) * clip_rate
 			local_params[name].copy_(new_value)
 			# diff[name] = (data - local_params[name])
-			diff[name] = (local_params[name] - model.state_dict()[name])
 
 		# print("Client", c, "done. --scaling attack--")
 
-		return diff
+		return local_params
 
 	def label_flipping_attack_train(self, model, c, num_clients, num_malicious_clients):
 		nclass = np.max(np.array(self.train_dataset.targets)) + 1
@@ -138,13 +136,9 @@ class Client(object):
 				loss.backward()
 				optimizer.step()
 
-		diff = dict()
-		for name, data in self.local_model.state_dict().items():
-			diff[name] = (data - model.state_dict()[name])
-
 		# print("Client", c, "done. --LF attack--")
 
-		return diff
+		return self.local_model.state_dict()
 
 	def random_label_flipping_attack_train(self, model, c):
 		nclass = np.max(np.array(self.train_dataset.targets)) + 1
@@ -170,13 +164,9 @@ class Client(object):
 				loss.backward()
 				optimizer.step()
 
-			diff = dict()
-			for name, data in self.local_model.state_dict().items():
-				diff[name] = (data - model.state_dict()[name])
-
 			# print("Client", c, "done. --LF attack--")
 
-			return diff
+			return self.local_model.state_dict()
 
 
 	def gaussian_attack_train(self, model, c, num_clients, num_malicious_clients):
@@ -190,12 +180,8 @@ class Client(object):
 		for e in range(self.conf["local_epochs"]):
 			for batch_id, batch in enumerate(self.train_loader):
 				data, target = batch
-				data = data.to(device)
-				target = target.to(device)
 
-				# if torch.cuda.is_available():
-				# 	data = data.cuda()
-				# 	target = target.cuda()
+				data, target = data.to(device), target.to(device)
 
 				optimizer.zero_grad()
 				output = self.local_model(data)
@@ -204,22 +190,16 @@ class Client(object):
 				optimizer.step()
 
 		local_params = self.local_model.state_dict()
-
 		for name, data in local_params.items():
-			# noise = torch.randn(data.shape).to(device)
-			noise = torch.randn_like(data).to(device)
-			# a = torch.mean(data.float())
-			# b = torch.std(data.float())
-			a = data.float().mean()
-			b = data.float().std()
+			noise = torch.randn(data.shape).to(device)
+			a = torch.mean(data.float())
+			b = torch.std(data.float())
 			data_GS = a + noise * b
-			local_params[name].copy_(data_GS.clone())
+			data.copy_(data_GS)
 
-		diff = dict()
-		for name, data in local_params.items():
-			diff[name] = (data - model.state_dict()[name])
+		# self.eval_local_model()
 
-		return diff
+		return local_params
 
 	def backdoor_attack_train(self, g_model, c, alpha=0.2):
 
@@ -264,3 +244,32 @@ class Client(object):
 		local_params = model.state_dict()
 		# print("Client", c, "done. --LIE attack--")
 		return local_params
+
+	def eval_local_model(self):
+		self.local_model.eval()
+
+		total_loss = 0.0
+		correct = 0
+		dataset_size = 0
+		for batch_id, batch in enumerate(self.eval_loader):
+			data, target = batch
+			dataset_size += data.size()[0]
+
+			data = data.to(device)
+			target = target.to(device)
+
+			# if torch.cuda.is_available():
+			# 	data = data.cuda()
+			# 	target = target.cuda()
+
+			output = self.local_model(data)
+
+			total_loss += torch.nn.functional.cross_entropy(output, target,
+															reduction='sum').item()  # sum up batch loss
+			pred = output.data.max(1)[1]  # get the index of the max log-probability
+			correct += pred.eq(target.data.view_as(pred)).cpu().sum().item()
+
+		acc = float(correct) / float(dataset_size)
+		total_l = total_loss / dataset_size
+
+		print("client", self.client_id, "acc:", acc, "loss:", total_l)

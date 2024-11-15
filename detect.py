@@ -12,9 +12,9 @@ def multi_krum(edge_server):
     clients_list = edge_server.clients
     num_malicious = edge_server.num_malicious
 
-    for i in range(len(clients_list)):
-        clients.append(clients_list[i])
-        local_params_update = diff_list[clients_list[i].client_id]
+    for i in clients_list:
+        clients.append(i)
+        local_params_update = diff_list[i.client_id]
         local_flatten_params = torch.cat([param.data.clone().view(-1) for key, param in local_params_update.items()], dim=0).cpu()
         user_grads = local_flatten_params[None, :] if len(user_grads) == 0 else torch.cat(
             (user_grads, local_flatten_params[None, :]), 0
@@ -43,25 +43,3 @@ def multi_krum(edge_server):
             benign_client_params[i.client_id] = diff_list[i.client_id]
 
     return benign_client_params, malicious_client
-
-def auror(edge_server, num_malicious, dataset):
-    user_grads = []
-    for c in range(edge_server.clients):
-        local_params = c.local_model.state_dict()
-
-        if dataset == "cifar10":
-            local_params = (local_params.reshape(-1, 2))[:, 0]
-
-        user_grads = local_params[None, :] if len(user_grads) == 0 else torch.cat(
-            (user_grads, local_params[None, :]), 0
-        )
-
-    grad = user_grads.cpu().numpy()
-    k_means = KMeans(n_clusters=2).fit(grad)
-
-    result = k_means.labels_
-
-    if sum(result) > len(result) / 2:
-        result = 1 - result
-
-    return result
