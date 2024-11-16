@@ -13,10 +13,9 @@ def multi_krum(edge_server):
 
     for i in clients_list:
         clients.append(i)
-        local_params_update = local_params_list[i.client_id]
-        local_flatten_params = torch.cat([param.data.clone().view(-1) for key, param in local_params_update.items()], dim=0).cpu()
-        user_grads = local_flatten_params[None, :] if len(user_grads) == 0 else torch.cat(
-            (user_grads, local_flatten_params[None, :]), 0
+        local_params = local_params_list[i.client_id]
+        user_grads = local_params[None, :] if len(user_grads) == 0 else torch.cat(
+            (user_grads, local_params[None, :]), 0
         )
 
     euclidean_matrix = euclidean_clients(user_grads)

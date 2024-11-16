@@ -170,45 +170,43 @@ if __name__ == '__main__':
 				edge_weights_accumulator_list.append(edge_weights_accumulator)
 		else:
 			for i in range(conf["num_edge_servers"]):
-				with tqdm(edge_servers[i].clients, total=len(edge_servers[i].clients), desc=f"Edge Server {i+1}/{conf['num_edge_servers']}", ncols=120) as pbar:
-					# for name, params in server.global_model.state_dict().items():
-					# 	edge_weights_accumulator[name] = torch.zeros_like(params)
-
+				# with tqdm(edge_servers[i].clients, total=len(edge_servers[i].clients), desc=f"Edge Server {i+1}/{conf['num_edge_servers']}", ncols=120) as pbar:
 					# 本地训练与攻击
-					for c in pbar:
-						local_params = None
-						if conf["attack_type"] == "scaling attack":
-							if c.is_malicious:
-								local_params = c.scaling_attack_train(edge_servers[i].global_model, c.client_id,
-														  conf["num_models"], num_malicious_clients)
-							else:
-								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
-
-						elif conf["attack_type"] == "label flipping attack":
-							if c.is_malicious:
-								local_params = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
-																	 conf["num_models"], num_malicious_clients)
-							else:
-								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
-
-						elif conf["attack_type"] == "random label flipping attack":
-							if c.is_malicious:
-								local_params = c.random_label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
-							else:
-								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
-
-						elif conf["attack_type"] == "gaussian attack":
-							if c.is_malicious:
-								local_params = c.gaussian_attack_train(edge_servers[i].global_model, c.client_id,
-															   conf["num_models"], num_malicious_clients)
-							else:
-								local_params = c.local_train(edge_servers[i].global_model, c.client_id)
-
+				for c in edge_servers[i].clients:
+					local_params = None
+					if conf["attack_type"] == "scaling attack":
+						if c.is_malicious:
+							local_params = c.scaling_attack_train(edge_servers[i].global_model, c.client_id,
+													  conf["num_models"], num_malicious_clients)
 						else:
-							# conf["attack_type"] == "no attack":
 							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
-						edge_servers[i].set_local_params(local_params, c.client_id)
+					elif conf["attack_type"] == "label flipping attack":
+						if c.is_malicious:
+							local_params = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
+																 conf["num_models"], num_malicious_clients)
+						else:
+							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
+
+					elif conf["attack_type"] == "random label flipping attack":
+						if c.is_malicious:
+							local_params = c.random_label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
+						else:
+							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
+
+					elif conf["attack_type"] == "gaussian attack":
+						if c.is_malicious:
+							local_params = c.gaussian_attack_train(edge_servers[i].global_model, c.client_id,
+														   conf["num_models"], num_malicious_clients)
+						else:
+							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
+
+					else:
+						# conf["attack_type"] == "no attack":
+						local_params = c.local_train(edge_servers[i].global_model, c.client_id)
+
+					local_params_flatten = torch.cat([param.data.clone().view(-1) for key, param in local_params.items()], dim=0)
+					edge_servers[i].set_local_params(local_params_flatten.cpu(), c.client_id)
 
 				if conf["detect_type"] == "multi krum":
 					sub_global_params_flatten, detected_malicious = multi_krum(edge_servers[i])

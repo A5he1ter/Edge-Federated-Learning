@@ -23,10 +23,8 @@ class EdgeServer:
         user_grads = []
         for c in self.local_params_list:
             local_params = self.local_params_list[c]
-            local_params_flatten = torch.cat([param.data.clone().view(-1) for key, param in local_params.items()],
-                                             dim=0)
-            user_grads = local_params_flatten[None, :] if len(user_grads) == 0 else torch.cat(
-                (user_grads, local_params_flatten[None, :]), dim=0
+            user_grads = local_params[None, :] if len(user_grads) == 0 else torch.cat(
+                (user_grads, local_params[None, :]), dim=0
             )
 
         avg_params = torch.mean(user_grads, dim=0)
