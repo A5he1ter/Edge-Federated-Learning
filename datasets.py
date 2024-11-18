@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torchvision import datasets, transforms
 from utils.femnist import  FEMNIST
@@ -7,9 +8,18 @@ def get_dataset(dir, name):
 	train_dataset = None
 	eval_dataset = None
 
+
 	if name=='mnist':
 		train_dataset = datasets.MNIST(dir, train=True, download=True, transform=transforms.ToTensor())
 		eval_dataset = datasets.MNIST(dir, train=False, transform=transforms.ToTensor())
+
+		train_data = train_dataset.data
+		train_labels = np.array(train_dataset.targets)
+
+		test_data = eval_dataset.data
+		test_labels = np.array(eval_dataset.targets)
+
+		train_data_size = train_data.shape[0]
 		
 	elif name=='cifar10':
 		transform_train = transforms.Compose([

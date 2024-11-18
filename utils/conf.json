@@ -10,7 +10,7 @@
 
 	"detect_type": "",
 
-	"num_edge_servers": 10,
+	"num_edge_servers": 1,
 	
 	"type" : "mnist",
 	

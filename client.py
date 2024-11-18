@@ -40,7 +40,8 @@ class Client(object):
 	def local_train(self, model, c):
 		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
-		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
+		# optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
+		optimizer = torch.optim.Adam(self.local_model.parameters(), lr=self.conf['lr'])
 
 		self.local_model.train()
 		for e in range(self.conf["local_epochs"]):
@@ -166,7 +167,8 @@ class Client(object):
 	def gaussian_attack_train(self, model, c, num_clients, num_malicious_clients):
 		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
-		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
+		# optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
+		optimizer = torch.optim.Adam(self.local_model.parameters(), lr=self.conf['lr'])
 
 		self.local_model.train()
 

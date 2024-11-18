@@ -88,6 +88,28 @@ class Server(object):
 
 		return acc, total_l
 
+	def TACC(self):
+		loss_collecter = []
+
+		self.global_model.eval()
+		sum_accu = 0
+		num = 0
+		loss_collecter.clear()
+		for batch_id, batch in enumerate(self.eval_loader):
+			data, target = batch
+			data, target = data.to(device), target.to(device)
+			output = self.global_model(data)
+			loss = torch.nn.functional.cross_entropy(output, target.long())
+			loss_collecter.append(loss.item())
+			output = torch.argmax(output, dim=1)
+			sum_accu += (output == target).float().mean()
+			num += 1
+
+		acc = sum_accu / num
+		avg_loss = sum(loss_collecter) / len(loss_collecter)
+
+		return acc, avg_loss
+
 	def ASR(self, model):
 		sum_ASR = 0
 		count = 0
