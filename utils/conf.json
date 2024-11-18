@@ -6,9 +6,9 @@
 
 	"malicious_ratio": 0.28,
 
-	"attack_type": "label flipping attack",
+	"attack_type": "gaussian attack",
 
-	"detect_type": "multi krum",
+	"detect_type": "",
 
 	"num_edge_servers": 10,
 	

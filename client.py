@@ -38,11 +38,8 @@ class Client(object):
 		self.eval_loader = torch.utils.data.DataLoader(eval_dataset, batch_size=self.conf["batch_size"], shuffle=True)
 									
 	def local_train(self, model, c):
+		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
-		for name, param in model.state_dict().items():
-			self.local_model.state_dict()[name].copy_(param.clone())
-	
-	
 		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
 		self.local_model.train()
@@ -70,8 +67,7 @@ class Client(object):
 		return self.local_model.state_dict()
 
 	def scaling_attack_train(self, model, c, num_clients, num_malicious_clients):
-		for name, param in model.state_dict().items():
-			self.local_model.state_dict()[name].copy_(param.clone())
+		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
 		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
@@ -110,8 +106,7 @@ class Client(object):
 	def label_flipping_attack_train(self, model, c, num_clients, num_malicious_clients):
 		nclass = np.max(np.array(self.train_dataset.targets)) + 1
 
-		for name, param in model.state_dict().items():
-			self.local_model.state_dict()[name].copy_(param.clone())
+		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
 		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
@@ -143,8 +138,7 @@ class Client(object):
 	def random_label_flipping_attack_train(self, model, c):
 		nclass = np.max(np.array(self.train_dataset.targets)) + 1
 
-		for name, param in model.state_dict().items():
-			self.local_model.state_dict()[name].copy_(param.clone())
+		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
 		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
@@ -170,8 +164,7 @@ class Client(object):
 
 
 	def gaussian_attack_train(self, model, c, num_clients, num_malicious_clients):
-		for name, param in model.state_dict().items():
-			self.local_model.state_dict()[name].copy_(param.clone())
+		self.local_model.load_state_dict(model.state_dict(), strict=True)
 
 		optimizer = torch.optim.SGD(self.local_model.parameters(), lr=self.conf['lr'])
 
@@ -190,6 +183,7 @@ class Client(object):
 				optimizer.step()
 
 		local_params = self.local_model.state_dict()
+
 		for name, data in local_params.items():
 			noise = torch.randn(data.shape).to(device)
 			a = torch.mean(data.float())

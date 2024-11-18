@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+import numpy as np
 import torch
 import random
 import matplotlib.pyplot as plt
@@ -183,14 +184,22 @@ if __name__ == '__main__':
 
 					elif conf["attack_type"] == "label flipping attack":
 						if c.is_malicious:
-							local_params = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id,
-																 conf["num_models"], num_malicious_clients)
+							local_params = c.label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
 						else:
 							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
 					elif conf["attack_type"] == "random label flipping attack":
 						if c.is_malicious:
 							local_params = c.random_label_flipping_attack_train(edge_servers[i].global_model, c.client_id)
+						else:
+							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
+
+					elif conf["attack_type"] == "mixed attack":
+						if c.is_malicious:
+							attack_func = [c.label_flipping_attack_train, c.scaling_attack_train]
+							local_params = random.choice(attack_func)(edge_servers[i].global_model, c.client_id,
+																	  conf["num_models"], num_malicious_clients)
+
 						else:
 							local_params = c.local_train(edge_servers[i].global_model, c.client_id)
 
@@ -227,7 +236,7 @@ if __name__ == '__main__':
 		global_loss_list.append(loss)
 
 
-		if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
+		if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack" or conf["attack_type"] == "mixed attack":
 			asr = server.ASR(server.global_model)
 			global_asr_list.append(asr)
 			print("Epoch %d acc: %f loss: %f asr: %f" % (e, acc, loss, asr))
@@ -246,8 +255,20 @@ if __name__ == '__main__':
 
 	fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
+	highlight_indices = np.array([0, 24, 49, 74, 99])
+	epoch_list = np.array(range(len(global_acc_list)))
+	global_acc_list = np.array(global_acc_list)
+	global_loss_list = np.array(global_loss_list)
+	global_asr_list = np.array(global_asr_list)
+	defense_acc_list = np.array(defense_acc_list)
+	malicious_precision_list = np.array(malicious_precision_list)
+	malicious_recall_list = np.array(malicious_recall_list)
+
 	# global model accuracy fig
-	axes[0, 0].plot(range(len(global_acc_list)), global_acc_list, 'r-o', label='Accuracy')
+	highlight_y = global_acc_list[highlight_indices]
+	highlight_x = epoch_list[highlight_indices]
+	axes[0, 0].plot(epoch_list, global_acc_list, "red", label='Accuracy')
+	axes[0, 0].scatter(highlight_x, highlight_y, color="red", label='Global Accuracy')
 	axes[0, 0].set_xlabel('Epoch')
 	axes[0, 0].set_ylabel('Accuracy')
 	axes[0, 0].set_title('Global Model Accuracy')
@@ -255,7 +276,10 @@ if __name__ == '__main__':
 	# plt.savefig('./fig/acc '+str(conf["type"])+" "+str(conf["attack_type"])+" "+str(conf["detect_type"])+".png")
 
 	# global model loss fig
-	axes[0, 1].plot(range(len(global_loss_list)), global_loss_list, 'b-o', label='Loss')
+	highlight_y = global_loss_list[highlight_indices]
+	highlight_x = epoch_list[highlight_indices]
+	axes[0, 1].plot(epoch_list, global_loss_list, "blue", label='Loss')
+	axes[0, 1].scatter(highlight_x, highlight_y, color="blue", label='Global Loss')
 	axes[0, 1].set_xlabel('Epoch')
 	axes[0, 1].set_ylabel('Loss')
 	axes[0, 1].set_title('Global Model Loss')
@@ -263,8 +287,11 @@ if __name__ == '__main__':
 	# plt.savefig('./fig/loss ' + str(conf["type"]) + " " + str(conf["attack_type"]) + str(conf["detect_type"]) + ".png")
 
 	# global asr fig
-	if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack":
-		axes[0, 2].plot(range(len(global_asr_list)), global_asr_list, 'g-o', label='ASR')
+	if conf["attack_type"] == "scaling attack" or conf["attack_type"] == "a little enough attack" or conf["attack_type"] == "mixed attack":
+		highlight_y = global_asr_list[highlight_indices]
+		highlight_x = epoch_list[highlight_indices]
+		axes[0, 2].plot(epoch_list, global_asr_list, "green", label='ASR')
+		axes[0, 2].scatter(highlight_x, highlight_y, color="green", label='ASR')
 		axes[0, 2].set_xlabel('Epoch')
 		axes[0, 2].set_ylabel('ASR')
 		axes[0, 2].set_title('ASR')
@@ -272,19 +299,28 @@ if __name__ == '__main__':
 		# plt.savefig('./fig/asr ' + str(conf["type"]) + " " + str(conf["attack_type"]) + str(conf["detect_type"])+ ".png")
 
 	if conf["attack_type"] != "no attack":
-		axes[1, 0].plot(range(len(defense_acc_list)), defense_acc_list, 'y-o', label='Defense Accuracy')
+		highlight_y = defense_acc_list[highlight_indices]
+		highlight_x = epoch_list[highlight_indices]
+		axes[1, 0].plot(epoch_list, defense_acc_list, "yellow", label='Defense Accuracy')
+		axes[1, 0].scatter(highlight_x, highlight_y, color="yellow", label='Defense Accuracy')
 		axes[1, 0].set_xlabel('Epoch')
 		axes[1, 0].set_ylabel('Defense Accuracy')
 		axes[1, 0].set_title('Defense Accuracy')
 		axes[1, 0].legend()
 
-		axes[1, 1].plot(range(len(malicious_precision_list)), malicious_precision_list, 'k-o', label='Malicious Precision')
+		highlight_y = malicious_precision_list[highlight_indices]
+		highlight_x = epoch_list[highlight_indices]
+		axes[1, 1].plot(epoch_list, malicious_precision_list, "black", label='Malicious Precision')
+		axes[1, 1].scatter(highlight_x, highlight_y, color="black", label='Malicious Precision')
 		axes[1, 1].set_xlabel('Epoch')
 		axes[1, 1].set_ylabel('Malicious Precision')
 		axes[1, 1].set_title('Malicious Precision')
 		axes[1, 1].legend()
 
-		axes[1, 2].plot(range(len(malicious_recall_list)), malicious_recall_list, 'm-o', label='Malicious Recall')
+		highlight_y = malicious_recall_list[highlight_indices]
+		highlight_x = epoch_list[highlight_indices]
+		axes[1, 2].plot(epoch_list, malicious_recall_list, "purple", label='Malicious Recall')
+		axes[1, 2].scatter(highlight_x, highlight_y, color="purple", label='Malicious Recall')
 		axes[1, 2].set_xlabel('Epoch')
 		axes[1, 2].set_ylabel('Malicious Recall')
 		axes[1, 2].set_title('Malicious Recall')
